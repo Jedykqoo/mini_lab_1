@@ -6,7 +6,7 @@ import numpy as np
 
 from functools import partial
 from tkinter import *
-from tkinter.filedialog import asksaveasfile
+from tkinter.filedialog import asksaveasfile, askopenfile
 
 from matplotlib import pyplot as plt
 
@@ -26,11 +26,19 @@ class Entries:
     def set_parent_window(self, parent_window):
         self.parent_window = parent_window
 
-    # adding of new entry (добавление нового текстового поля)
-    def add_entry(self):
+        # adding of new entry (добавление нового текстового поля)
+
+    def add_entry(self, default_str=None):
         new_entry = Entry(self.parent_window)
+
+        def on_entry_focused(*args, **kwargs):
+            self.focused_entry = new_entry
+
+        new_entry.bind('<FocusIn>', on_entry_focused)
         new_entry.icursor(0)
         new_entry.focus()
+        if default_str is not None:
+            new_entry.insert(0, default_str)
         new_entry.pack()
         plot_button = self.parent_window.get_button_by_name('plot')
         if plot_button:
@@ -72,6 +80,13 @@ class Entries:
         no_button = Button(master=mw.top, text='Нет', command=on_click(False))
         mw.add_button(yes_button)
         mw.add_button(no_button)
+
+        def import_entries_state(self, list_of_function):
+            for entry in self.entries_list:
+                entry.pack_forget()
+            self.entries_list = []
+            for func in list_of_function:
+                self.add_entry(default_str=func)
 
 
 # class for plotting (класс для построения графиков)
@@ -198,6 +213,26 @@ class Commands:
         self._state.save_state()
         return self
 
+    # загрузка граф-ка
+    def load_from(self):
+        filename = askopenfile()
+        if filename is None:
+            return
+        self._state.reset_state()
+        self._state.list_of_function = json.load(filename)['list_of_function']
+        self.parent_window.entries.import_entries_state(self._state.list_of_function)
+        list_of_functions = [func for func in self._state.list_of_function if Commands.__is_not_blank(func)]
+        figure = self.parent_window.plotter.plot(list_of_functions)
+        self._state.figure = figure
+        self.__forget_canvas()
+        self.__figure_canvas = FigureCanvasTkAgg(figure, self.parent_window)
+        self.__forget_navigation()
+        self.__navigation_toolbar = NavigationToolbar2Tk(self.__figure_canvas, self.parent_window)
+        self.__figure_canvas.get_tk_widget().pack(side=TOP, fill=BOTH, expand=1)
+        plot_button = self.parent_window.get_button_by_name('plot')
+        if plot_button:
+            plot_button.pack_forget()
+
 
 # class for buttons storage (класс для хранения кнопок)
 class Buttons:
@@ -272,6 +307,7 @@ class App(Tk):
 
         file_menu = Menu(menu)
         file_menu.add_command(label="Save as...", command=self.commands.get_command_by_name('save_as'))
+        file_menu.add_command(label="Load from...", command=self.commands.get_command_by_name('load_from'))
         menu.add_cascade(label="File", menu=file_menu)
 
 ####################################
@@ -296,6 +332,7 @@ if __name__ == "__main__":
     commands_main.add_command('add_func', commands_main.add_func)
     commands_main.add_command('delete_focused_func', commands_main.delete_focused_func)
     commands_main.add_command('save_as', commands_main.save_as)
+    commands_main.add_command('load_from', commands_main.load_from)
     # init app (создаем экземпляр приложения)
     app = App(buttons_main, plotter_main, commands_main, entries_main)
     # init add func button (добавляем кнопку добавления новой функции)
