@@ -21,6 +21,7 @@ class Entries:
     def __init__(self):
         self.entries_list = []
         self.parent_window = None
+        self.focused_entry = None
 
     def set_parent_window(self, parent_window):
         self.parent_window = parent_window
@@ -36,6 +37,41 @@ class Entries:
             plot_button.pack_forget()
         self.parent_window.add_button('plot', 'Plot', 'plot', hot_key='<Return>')
         self.entries_list.append(new_entry)
+
+    # Удаляем выбранный график
+    def delete_focused_func(self):
+        if self.focused_entry is None:
+            return
+        if len(self.focused_entry.get()) > 0:
+            self.__modal_on_deleting_nonempty_entry()
+        else:
+            self.__delete_focused_entry()
+
+    def __delete_focused_entry(self):
+        self.focused_entry.pack_forget()
+        self.entries_list.remove(self.focused_entry)
+        self.focused_entry = None
+        # redrawing plot button
+        plot_button = self.parent_window.get_button_by_name('plot')
+        if plot_button:
+            plot_button.pack_forget()
+        self.parent_window.add_button('plot', 'Plot', 'plot', hot_key='<Return>')
+
+    # Предупреждение об уд-ии
+    def __modal_on_deleting_nonempty_entry(self):
+        mw = ModalWindow(self.parent_window, title='Удаление строки', labeltext='Удаляемая строка непуста, точно удаляем?')
+
+        def on_click(is_yes):
+            def func(*args, **kwargs):
+                mw.cancel()
+                if is_yes:
+                    self.__delete_focused_entry()
+            return func
+
+        yes_button = Button(master=mw.top, text='Да', command=on_click(True))
+        no_button = Button(master=mw.top, text='Нет', command=on_click(False))
+        mw.add_button(yes_button)
+        mw.add_button(no_button)
 
 
 # class for plotting (класс для построения графиков)
@@ -148,6 +184,11 @@ class Commands:
         if plot_button:
             plot_button.pack_forget()
 
+    def delete_focused_func(self, *args, **kwargs):
+        self.__forget_canvas()
+        self.__forget_navigation()
+        self.parent_window.entries.delete_focused_func()
+
     def add_func(self, *args, **kwargs):
         self.__forget_canvas()
         self.__forget_navigation()
@@ -233,6 +274,12 @@ class App(Tk):
         file_menu.add_command(label="Save as...", command=self.commands.get_command_by_name('save_as'))
         menu.add_cascade(label="File", menu=file_menu)
 
+####################################
+#
+#   Control-a - add func
+#   Control-b - delete func
+#
+#####################################
 
 if __name__ == "__main__":
     # init buttons (создаем кнопки)
@@ -247,11 +294,13 @@ if __name__ == "__main__":
     # command's registration (регистрация команд)
     commands_main.add_command('plot', commands_main.plot)
     commands_main.add_command('add_func', commands_main.add_func)
+    commands_main.add_command('delete_focused_func', commands_main.delete_focused_func)
     commands_main.add_command('save_as', commands_main.save_as)
     # init app (создаем экземпляр приложения)
     app = App(buttons_main, plotter_main, commands_main, entries_main)
     # init add func button (добавляем кнопку добавления новой функции)
     app.add_button('add_func', 'Добавить функцию', 'add_func', hot_key='<Control-a>')
+    app.add_button('delete_focused_func', 'Удалить выбранную функцию', 'delete_focused_func', hot_key='<Control-d>')
     # init first entry (создаем первое поле ввода)
     entries_main.add_entry()
     app.create_menu()
